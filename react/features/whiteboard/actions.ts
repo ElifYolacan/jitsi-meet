@@ -80,3 +80,43 @@ export const restrictWhiteboard = (shouldCloseWhiteboard = true) => (dispatch: I
     dispatch(resetWhiteboard());
     sendAnalytics(createRestrictWhiteboardEvent());
 };
+
+export function octapullCloseWhiteboard() {
+    return async (
+        dispatch: IStore["dispatch"],
+        getState: IStore["getState"]
+    ) => {
+        const state = getState();
+        const isAllowed = isWhiteboardAllowed(state);
+        const isOpen = isWhiteboardOpen(state);
+
+        if (isAllowed) {
+            if (isOpen && isWhiteboardVisible(state)) {
+                dispatch(setWhiteboardOpen(false));
+            }
+        } else if (typeof APP !== "undefined") {
+            APP.API.notifyWhiteboardStatusChanged(WhiteboardStatus.FORBIDDEN);
+        }
+    };
+}
+
+export function octapullOpenWhiteboard() {
+    return async (
+        dispatch: IStore["dispatch"],
+        getState: IStore["getState"]
+    ) => {
+        const state = getState();
+        const isAllowed = isWhiteboardAllowed(state);
+        const isOpen = isWhiteboardOpen(state);
+
+        if (isAllowed) {
+            if (isOpen && !isWhiteboardVisible(state)) {
+                dispatch(setWhiteboardOpen(true));
+            } else if (!isOpen) {
+                dispatch(setWhiteboardOpen(true));
+            }
+        } else if (typeof APP !== "undefined") {
+            APP.API.notifyWhiteboardStatusChanged(WhiteboardStatus.FORBIDDEN);
+        }
+    };
+}

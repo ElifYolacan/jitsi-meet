@@ -113,7 +113,7 @@ import { isAudioMuteButtonDisabled } from '../../react/features/toolbox/function
 import { setTileView, toggleTileView } from '../../react/features/video-layout/actions.any';
 import { muteAllParticipants } from '../../react/features/video-menu/actions';
 import { setVideoQuality } from '../../react/features/video-quality/actions';
-import { toggleWhiteboard } from '../../react/features/whiteboard/actions.any';
+import { toggleWhiteboard, octapullCloseWhiteboard, octapullOpenWhiteboard } from '../../react/features/whiteboard/actions.any';
 import { getJitsiMeetTransport } from '../transport';
 
 import {
@@ -825,6 +825,15 @@ function initCommands() {
         },
         'toggle-whiteboard': () => {
             APP.store.dispatch(toggleWhiteboard());
+        },
+        'octapull-close-whiteboard': () => {
+            APP.store.dispatch(octapullCloseWhiteboard());
+        },
+        'octapull-open-whiteboard': () => {
+            APP.store.dispatch(octapullOpenWhiteboard());
+        },
+        'close-all-whiteboard': () => {
+            APP.store.dispatch(closeAllWhiteboard());
         }
     };
     transport.on('event', ({ data, name }) => {

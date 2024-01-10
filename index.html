@@ -11,7 +11,11 @@
     <link rel="stylesheet" href="css/all.css">
     <!--#include virtual="fonts.html"-->
     <link rel="manifest" id="manifest-placeholder">
-
+    <style>
+        .active-speaker-indicator {
+            box-shadow: inset 0px 0px 0px 3px #FF5F00 !important;
+        }
+    </style>
     <script>
         function contextRoot(pathname) {
             const contextRootEndIndex = pathname.lastIndexOf('/');
@@ -199,6 +203,11 @@
     <!--#include virtual="static/welcomePageAdditionalContent.html" -->
     <!--#include virtual="static/welcomePageAdditionalCard.html" -->
     <!--#include virtual="static/settingsToolbarAdditionalContent.html" -->
+    <style>
+        .jss24 .active-speaker-indicator {
+            box-shadow: inset 0px 0px 0px 3px #FF5F00 !important;
+        }
+    </style>
   </head>
   <body>
     <noscript aria-hidden="true">
@@ -206,5 +215,10 @@
     </noscript>
     <!--#include virtual="body.html" -->
     <div id="react" role="main"></div>
+    <style>
+        .jss24 .active-speaker-indicator {
+            box-shadow: inset 0px 0px 0px 3px #FF5F00 !important;
+        }
+    </style>
   </body>
 </html>

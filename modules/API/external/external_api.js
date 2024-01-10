@@ -91,7 +91,10 @@ const commands = {
     toggleTileView: 'toggle-tile-view',
     toggleVirtualBackgroundDialog: 'toggle-virtual-background',
     toggleVideo: 'toggle-video',
-    toggleWhiteboard: 'toggle-whiteboard'
+    toggleWhiteboard: 'toggle-whiteboard',
+    octapullCloseWhiteboard: 'octapull-close-whiteboard',
+    octapullOpenWhiteboard: 'octapull-open-whiteboard',
+    closeAllWhiteboard: 'close-all-whiteboard'
 };
 
 /**

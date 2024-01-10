@@ -19,7 +19,7 @@ export function toggleWhiteboard() {
         if (isAllowed) {
             if (isOpen && !isWhiteboardVisible(state)) {
                 dispatch(setWhiteboardOpen(true));
-            } else if (isOpen && isWhiteboardVisible(state)) {
+            } else if (isOpen && !isWhiteboardVisible(state)) {
                 dispatch(setWhiteboardOpen(false));
             } else if (!isOpen) {
                 dispatch(setWhiteboardOpen(true));
