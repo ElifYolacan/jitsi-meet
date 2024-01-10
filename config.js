@@ -1030,7 +1030,7 @@ var config = {
         disabled: false,
 
         // The Google Analytics Tracking ID:
-        // googleAnalyticsTrackingId: 'your-tracking-id-UA-123456-1',
+        googleAnalyticsTrackingId: 'G-WMTJPM9WS0',
 
         // Matomo configuration:
         // matomoEndpoint: 'https://your-matomo-endpoint/',
