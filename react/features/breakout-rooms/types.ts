@@ -33,4 +33,5 @@ export interface IRoomInfoParticipant {
     id: string;
     jid: string;
     role: string;
+    email: string;
 }

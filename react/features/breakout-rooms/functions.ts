@@ -65,9 +65,12 @@ export const getRoomsInfo = (stateful: IStateful) => {
                 role: localParticipant.role,
                 displayName: localParticipant.name,
                 avatarUrl: localParticipant.loadableAvatarUrl,
-                id: localParticipant.id
+                id: localParticipant.id,
+                email: localParticipant.email
             };
         }
+
+        console.log('localParticipantInfo', localParticipantInfo);
 
         return {
             ...initialRoomsInfo,
@@ -81,12 +84,23 @@ export const getRoomsInfo = (stateful: IStateful) => {
                         ...conferenceParticipants.map((participantItem: IJitsiParticipant) => {
                             const storeParticipant = getParticipantById(stateful, participantItem.getId());
 
+                            console.log('storeParticipant', {
+                                jid: participantItem.getJid(),
+                                role: participantItem.getRole(),
+                                displayName: participantItem.getDisplayName(),
+                                avatarUrl: storeParticipant?.loadableAvatarUrl,
+                                id: participantItem.getId(),
+                                email: storeParticipant?.email
+                            });
+                            
+
                             return {
                                 jid: participantItem.getJid(),
                                 role: participantItem.getRole(),
                                 displayName: participantItem.getDisplayName(),
                                 avatarUrl: storeParticipant?.loadableAvatarUrl,
-                                id: participantItem.getId()
+                                id: participantItem.getId(),
+                                email: storeParticipant?.email
                             } as IRoomInfoParticipant;
                         }) ]
                     : [ localParticipantInfo ]
@@ -116,7 +130,8 @@ export const getRoomsInfo = (stateful: IStateful) => {
                             displayName: participantItem?.displayName,
                             avatarUrl: storeParticipant?.loadableAvatarUrl,
                             id: storeParticipant ? storeParticipant.id
-                                : participantLongId
+                                : participantLongId,
+                            email: storeParticipant?.email
                         } as IRoomInfoParticipant;
                     }) : []
             } as IRoomInfo;
