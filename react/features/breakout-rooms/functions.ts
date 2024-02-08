@@ -70,7 +70,7 @@ export const getRoomsInfo = (stateful: IStateful) => {
             };
         }
 
-        console.log('localParticipantInfo', localParticipantInfo);
+        //console.log('localParticipantInfo', localParticipantInfo);
 
         return {
             ...initialRoomsInfo,
