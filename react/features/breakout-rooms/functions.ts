@@ -70,8 +70,6 @@ export const getRoomsInfo = (stateful: IStateful) => {
             };
         }
 
-        //console.log('localParticipantInfo', localParticipantInfo);
-
         return {
             ...initialRoomsInfo,
             rooms: [ {
@@ -84,15 +82,14 @@ export const getRoomsInfo = (stateful: IStateful) => {
                         ...conferenceParticipants.map((participantItem: IJitsiParticipant) => {
                             const storeParticipant = getParticipantById(stateful, participantItem.getId());
 
-                            console.log('storeParticipant', {
-                                jid: participantItem.getJid(),
-                                role: participantItem.getRole(),
-                                displayName: participantItem.getDisplayName(),
-                                avatarUrl: storeParticipant?.loadableAvatarUrl,
-                                id: participantItem.getId(),
-                                email: storeParticipant?.email
-                            });
-                            
+                            // console.log('storeParticipant', {
+                            //     jid: participantItem.getJid(),
+                            //     role: participantItem.getRole(),
+                            //     displayName: participantItem.getDisplayName(),
+                            //     avatarUrl: storeParticipant?.loadableAvatarUrl,
+                            //     id: participantItem.getId(),
+                            //     email: storeParticipant?.email
+                            // });
 
                             return {
                                 jid: participantItem.getJid(),
@@ -117,6 +114,7 @@ export const getRoomsInfo = (stateful: IStateful) => {
                 isMainRoom: Boolean(breakoutRoomItem.isMainRoom),
                 id: breakoutRoomItem.id,
                 jid: breakoutRoomItem.jid,
+                name: breakoutRoomItem.name,
                 participants: breakoutRoomItem.participants && Object.keys(breakoutRoomItem.participants).length
                     ? Object.keys(breakoutRoomItem.participants).map(participantLongId => {
                         const participantItem = breakoutRoomItem.participants[participantLongId];
