@@ -416,7 +416,7 @@
         "yourEntireScreen": "Tüm ekranınız"
     },
     "documentSharing": {
-        "title": "Paylaşılan Döküman"
+        "title": "NOT"
     },
     "e2ee": {
         "labelToolTip": "Bu görüşmedeki ses ve video iletişimi uçtan uca şifrelenmiştir."
@@ -1073,7 +1073,7 @@
             "chat": "Mesajlaşma penceresini aç/kapat",
             "clap": "Alkış",
             "collapse": "Daralt",
-            "document": "Paylaşılan dokümanı aç/kapat",
+            "document": "Notu aç/kapat",
             "download": "Uygulamalarımızı indirin",
             "embedMeeting": "Toplantıyı yerleştir",
             "endConference": "Herkes için toplantıyı sonlandır",
@@ -1133,8 +1133,8 @@
             "closeChat": "Sohbeti kapat",
             "closeMoreActions": "Daha fazla aksiyon menüsünü kapat",
             "closeParticipantsPane": "Katılımcı panelini kapat",
-            "documentClose": "Paylaşılan dokümanı kapat",
-            "documentOpen": "Paylaşılan dokümanı aç",
+            "documentClose": "Notu kapat",
+            "documentOpen": "Notu aç",
             "enterFullScreen": "Tam ekran görüntüle",
             "enterTileView": "Döşeme görünümüne gir",
             "exitFullScreen": "Tam ekrandan çık",
@@ -1168,8 +1168,8 @@
         "closeReactionsMenu": "Reaksiyon menüsünü kapat",
         "disableNoiseSuppression": "",
         "disableReactionSounds": "Toplantı için reaksiyon seslerini devre dışı bırak",
-        "documentClose": "Paylaşılan dokümanı kapat",
-        "documentOpen": "Paylaşılan dokümanı aç",
+        "documentClose": "Notu kapat",
+        "documentOpen": "Notu aç",
         "download": "Uygulamalarımızı indirin",
         "e2ee": "Uçtan uca şifreleme",
         "embedMeeting": "Toplantıyı yerleştir",
