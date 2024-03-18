@@ -157,11 +157,11 @@ let videoAvailable = true;
 function initCommands() {
     commands = {
         'add-breakout-room': name => {
-            if (!isLocalParticipantModerator(APP.store.getState())) {
-                logger.error('Missing moderator rights to add breakout rooms');
+            // if (!isLocalParticipantModerator(APP.store.getState())) {
+            //     logger.error('Missing moderator rights to add breakout rooms');
 
-                return;
-            }
+            //     return;
+            // }
             APP.store.dispatch(createBreakoutRoom(name));
         },
         'answer-knocking-participant': (id, approved) => {
@@ -182,11 +182,11 @@ function initCommands() {
             APP.store.dispatch(approveParticipantAudio(participantId));
         },
         'auto-assign-to-breakout-rooms': () => {
-            if (!isLocalParticipantModerator(APP.store.getState())) {
-                logger.error('Missing moderator rights to auto-assign participants to breakout rooms');
+            // if (!isLocalParticipantModerator(APP.store.getState())) {
+            //     logger.error('Missing moderator rights to auto-assign participants to breakout rooms');
 
-                return;
-            }
+            //     return;
+            // }
             APP.store.dispatch(autoAssignToBreakoutRooms());
         },
         'grant-moderator': participantId => {
@@ -293,11 +293,11 @@ function initCommands() {
             APP.store.dispatch(reject(participantId));
         },
         'remove-breakout-room': breakoutRoomJid => {
-            if (!isLocalParticipantModerator(APP.store.getState())) {
-                logger.error('Missing moderator rights to remove breakout rooms');
+            // if (!isLocalParticipantModerator(APP.store.getState())) {
+            //     logger.error('Missing moderator rights to remove breakout rooms');
 
-                return;
-            }
+            //     return;
+            // }
             APP.store.dispatch(removeBreakoutRoom(breakoutRoomJid));
         },
         'resize-large-video': (width, height) => {
@@ -779,22 +779,22 @@ function initCommands() {
             APP.store.dispatch(setPrivateMessageRecipient());
         },
         'close-breakout-room': roomId => {
-            if (!isLocalParticipantModerator(APP.store.getState())) {
-                logger.error('Missing moderator rights to close breakout rooms');
+            // if (!isLocalParticipantModerator(APP.store.getState())) {
+            //     logger.error('Missing moderator rights to close breakout rooms');
 
-                return;
-            }
+            //     return;
+            // }
             APP.store.dispatch(closeBreakoutRoom(roomId));
         },
         'join-breakout-room': roomId => {
             APP.store.dispatch(moveToRoom(roomId));
         },
         'send-participant-to-room': (participantId, roomId) => {
-            if (!isLocalParticipantModerator(APP.store.getState())) {
-                logger.error('Missing moderator rights to send participants to rooms');
+            // if (!isLocalParticipantModerator(APP.store.getState())) {
+            //     logger.error('Missing moderator rights to send participants to rooms');
 
-                return;
-            }
+            //     return;
+            // }
 
             APP.store.dispatch(sendParticipantToRoom(participantId, roomId));
         },
