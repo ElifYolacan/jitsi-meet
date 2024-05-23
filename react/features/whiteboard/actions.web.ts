@@ -46,3 +46,68 @@ export const restrictWhiteboard = (shouldCloseWhiteboard = true) => (dispatch: I
     dispatch(resetWhiteboard());
     sendAnalytics(createRestrictWhiteboardEvent());
 };
+
+/**
+ * Shows a warning notification about the whiteboard user limit.
+ *
+ * @returns {Function}
+ */
+export function toggleWhiteboard() {
+    return async (dispatch: IStore['dispatch'], getState: IStore['getState']) => {
+        const state = getState();
+        const isAllowed = isWhiteboardAllowed(state);
+        const isOpen = isWhiteboardOpen(state);
+
+        if (isAllowed) {
+            if (isOpen && !isWhiteboardVisible(state)) {
+                dispatch(setWhiteboardOpen(true));
+            } else if (isOpen && !isWhiteboardVisible(state)) {
+                dispatch(setWhiteboardOpen(false));
+            } else if (!isOpen) {
+                dispatch(setWhiteboardOpen(true));
+            }
+        } else if (typeof APP !== 'undefined') {
+            APP.API.notifyWhiteboardStatusChanged(WhiteboardStatus.FORBIDDEN);
+        }
+    };
+}
+
+export function octapullCloseWhiteboard() {
+    return async (
+        dispatch: IStore["dispatch"],
+        getState: IStore["getState"]
+    ) => {
+        const state = getState();
+        const isAllowed = isWhiteboardAllowed(state);
+        const isOpen = isWhiteboardOpen(state);
+
+        if (isAllowed) {
+            if (isOpen && isWhiteboardVisible(state)) {
+                dispatch(setWhiteboardOpen(false));
+            }
+        } else if (typeof APP !== "undefined") {
+            APP.API.notifyWhiteboardStatusChanged(WhiteboardStatus.FORBIDDEN);
+        }
+    };
+}
+
+export function octapullOpenWhiteboard() {
+    return async (
+        dispatch: IStore["dispatch"],
+        getState: IStore["getState"]
+    ) => {
+        const state = getState();
+        const isAllowed = isWhiteboardAllowed(state);
+        const isOpen = isWhiteboardOpen(state);
+
+        if (isAllowed) {
+            if (isOpen && !isWhiteboardVisible(state)) {
+                dispatch(setWhiteboardOpen(true));
+            } else if (!isOpen) {
+                dispatch(setWhiteboardOpen(true));
+            }
+        } else if (typeof APP !== "undefined") {
+            APP.API.notifyWhiteboardStatusChanged(WhiteboardStatus.FORBIDDEN);
+        }
+    };
+}
