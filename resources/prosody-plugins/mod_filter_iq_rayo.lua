@@ -7,9 +7,12 @@ local room_jid_match_rewrite = util.room_jid_match_rewrite;
 local is_feature_allowed = util.is_feature_allowed;
 local get_room_from_jid = util.get_room_from_jid;
 local is_healthcheck_room = util.is_healthcheck_room;
+local process_host_module = util.process_host_module;
 local jid_bare = require "util.jid".bare;
 
 local sessions = prosody.full_sessions;
+
+local measure_drop = module:measure('drop', 'counter');
 
 local main_muc_component_host = module:get_option_string('main_muc');
 if main_muc_component_host == nil then
@@ -107,6 +110,7 @@ module:hook("pre-iq/full", function(event)
                 then
                     module:log("warn",
                         "Filtering stanza dial, stanza:%s, outgoing calls limit reached", tostring(stanza));
+                    measure_drop(1);
                     session.send(st.error_reply(stanza, "cancel", "resource-constraint"));
                     return true;
                 end
@@ -194,24 +198,6 @@ function get_concurrent_outgoing_count(context_user, context_group)
 end
 
 module:hook_global('config-reloaded', load_config);
-
--- process a host module directly if loaded or hooks to wait for its load
-function process_host_module(name, callback)
-    local function process_host(host)
-        if host == name then
-            callback(module:context(host), host);
-        end
-    end
-
-    if prosody.hosts[name] == nil then
-        module:log('debug', 'No host/component found, will wait for it: %s', name)
-
-        -- when a host or component is added
-        prosody.events.add_handler('host-activated', process_host);
-    else
-        process_host(name);
-    end
-end
 
 function process_set_affiliation(event)
     local actor, affiliation, jid, previous_affiliation, room

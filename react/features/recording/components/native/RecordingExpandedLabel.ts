@@ -4,6 +4,7 @@ import { IReduxState } from '../../../app/types';
 import { translate } from '../../../base/i18n/functions';
 import ExpandedLabel, { IProps as AbstractProps } from '../../../base/label/components/native/ExpandedLabel';
 import { JitsiRecordingConstants } from '../../../base/lib-jitsi-meet';
+import { isRecorderTranscriptionsRunning } from '../../../transcribing/functions';
 import { getSessionStatusToShow } from '../../functions';
 
 interface IProps extends AbstractProps {
@@ -42,7 +43,7 @@ class RecordingExpandedLabel extends ExpandedLabel<IProps> {
      */
     _getLabel() {
         const { _status, mode, t } = this.props;
-        let postfix = 'recording', prefix = 'expandedOn'; // Default values.
+        let postfix = 'expandedOn', prefix = 'recording'; // Default values.
 
         switch (mode) {
         case JitsiRecordingConstants.mode.STREAM:
@@ -90,7 +91,7 @@ function _mapStateToProps(state: IReduxState, ownProps: any) {
     const { mode } = ownProps;
 
     return {
-        _isTranscribing: state['features/transcribing'].isTranscribing,
+        _isTranscribing: isRecorderTranscriptionsRunning(state),
         _status: getSessionStatusToShow(state, mode)
     };
 }

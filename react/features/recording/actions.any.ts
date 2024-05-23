@@ -19,6 +19,7 @@ import {
 import { NOTIFICATION_TIMEOUT_TYPE, NOTIFICATION_TYPE } from '../notifications/constants';
 import { INotificationProps } from '../notifications/types';
 import { setRequestingSubtitles } from '../subtitles/actions.any';
+import { isRecorderTranscriptionsRunning } from '../transcribing/functions';
 
 import {
     CLEAR_RECORDING_SESSIONS,
@@ -26,6 +27,7 @@ import {
     SET_MEETING_HIGHLIGHT_BUTTON_STATE,
     SET_PENDING_RECORDING_NOTIFICATION_UID,
     SET_SELECTED_RECORDING_SERVICE,
+    SET_START_RECORDING_NOTIFICATION_SHOWN,
     SET_STREAM_KEY,
     START_LOCAL_RECORDING,
     STOP_LOCAL_RECORDING
@@ -54,6 +56,20 @@ import logger from './logger';
 export function clearRecordingSessions() {
     return {
         type: CLEAR_RECORDING_SESSIONS
+    };
+}
+
+
+/**
+ * Marks the start recording notification as shown.
+ *
+ * @returns {{
+ *      type: SET_START_RECORDING_NOTIFICATION_SHOWN
+ * }}
+ */
+export function setStartRecordingNotificationShown() {
+    return {
+        type: SET_START_RECORDING_NOTIFICATION_SHOWN
     };
 }
 
@@ -389,19 +405,22 @@ export function stopLocalVideoRecording() {
  */
 export function showStartRecordingNotificationWithCallback(openRecordingDialog: Function) {
     return (dispatch: IStore['dispatch'], getState: IStore['getState']) => {
-        const state = getState();
+        let state = getState();
         const { recordings } = state['features/base/config'];
         const { suggestRecording } = recordings || {};
         const recordButtonProps = getRecordButtonProps(state);
-        const isAlreadyRecording = isRecordingRunning(state);
+        const isAlreadyRecording = isRecordingRunning(state) || isRecorderTranscriptionsRunning(state);
+        const wasNotificationShown = state['features/recording'].wasStartRecordingSuggested;
 
         if (!suggestRecording
             || isAlreadyRecording
             || !recordButtonProps.visible
-            || recordButtonProps.disabled) {
+            || recordButtonProps.disabled
+            || wasNotificationShown) {
             return;
         }
 
+        dispatch(setStartRecordingNotificationShown());
         dispatch(showNotification({
             titleKey: 'notify.suggestRecordingTitle',
             descriptionKey: 'notify.suggestRecordingDescription',
@@ -409,9 +428,9 @@ export function showStartRecordingNotificationWithCallback(openRecordingDialog: 
             customActionType: [ BUTTON_TYPES.PRIMARY ],
             customActionNameKey: [ 'notify.suggestRecordingAction' ],
             customActionHandler: [ () => {
+                state = getState();
                 const isModerator = isLocalParticipantModerator(state);
                 const { recordingService } = state['features/base/config'];
-
                 const canBypassDialog = isModerator
                     && recordingService?.enabled
                     && isJwtFeatureEnabled(state, 'recording', true);
@@ -432,7 +451,7 @@ export function showStartRecordingNotificationWithCallback(openRecordingDialog: 
                     });
 
                     if (autoTranscribeOnRecord) {
-                        dispatch(setRequestingSubtitles(true, false));
+                        dispatch(setRequestingSubtitles(true, false, null));
                     }
                 } else {
                     openRecordingDialog();

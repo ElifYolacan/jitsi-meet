@@ -26,8 +26,8 @@ local target_subdomain_pattern = "^"..escaped_muc_domain_prefix..".([^%.]+)%."..
 -- table to store all incoming iqs without roomname in it, like discoinfo to the muc component
 local roomless_iqs = {};
 
-local OUTBOUND_SIP_JIBRI_PREFIX = 'outbound-sip-jibri@';
-local INBOUND_SIP_JIBRI_PREFIX = 'inbound-sip-jibri@';
+local OUTBOUND_SIP_JIBRI_PREFIXES = { 'outbound-sip-jibri@', 'sipjibriouta@', 'sipjibrioutb@' };
+local INBOUND_SIP_JIBRI_PREFIXES = { 'inbound-sip-jibri@', 'sipjibriina@', 'sipjibriina@' };
 
 local split_subdomain_cache = cache.new(1000);
 local extract_subdomain_cache = cache.new(1000);
@@ -281,6 +281,19 @@ function starts_with(str, start)
     return str:sub(1, #start) == start
 end
 
+function starts_with_one_of(str, prefixes)
+    if not str then
+        return false;
+    end
+    for i=1,#prefixes do
+        if starts_with(str, prefixes[i]) then
+            return prefixes[i];
+        end
+    end
+    return false
+end
+
+
 function ends_with(str, ending)
     return ending == "" or str:sub(-#ending) == ending
 end
@@ -456,10 +469,10 @@ end
 function get_sip_jibri_email_prefix(email)
     if not email then
         return nil;
-    elseif starts_with(email, INBOUND_SIP_JIBRI_PREFIX) then
-        return INBOUND_SIP_JIBRI_PREFIX;
-    elseif starts_with(email, OUTBOUND_SIP_JIBRI_PREFIX) then
-        return OUTBOUND_SIP_JIBRI_PREFIX;
+    elseif starts_with_one_of(email, INBOUND_SIP_JIBRI_PREFIXES) then
+        return starts_with_one_of(email, INBOUND_SIP_JIBRI_PREFIXES);
+    elseif starts_with_one_of(email, OUTBOUND_SIP_JIBRI_PREFIXES) then
+        return starts_with_one_of(email, OUTBOUND_SIP_JIBRI_PREFIXES);
     else
         return nil;
     end
@@ -490,10 +503,36 @@ function is_sip_jibri_join(stanza)
     return false
 end
 
+-- process a host module directly if loaded or hooks to wait for its load
+function process_host_module(name, callback)
+    local function process_host(host)
+
+        if host == name then
+            callback(module:context(host), host);
+        end
+    end
+
+    if prosody.hosts[name] == nil then
+        module:log('info', 'No host/component found, will wait for it: %s', name)
+
+        -- when a host or component is added
+        prosody.events.add_handler('host-activated', process_host);
+    else
+        process_host(name);
+    end
+end
+
+function table_shallow_copy(t)
+    local t2 = {}
+    for k, v in pairs(t) do
+        t2[k] = v
+    end
+    return t2
+end
 
 return {
-    OUTBOUND_SIP_JIBRI_PREFIX = OUTBOUND_SIP_JIBRI_PREFIX;
-    INBOUND_SIP_JIBRI_PREFIX = INBOUND_SIP_JIBRI_PREFIX;
+    OUTBOUND_SIP_JIBRI_PREFIXES = OUTBOUND_SIP_JIBRI_PREFIXES;
+    INBOUND_SIP_JIBRI_PREFIXES = INBOUND_SIP_JIBRI_PREFIXES;
     extract_subdomain = extract_subdomain;
     is_feature_allowed = is_feature_allowed;
     is_healthcheck_room = is_healthcheck_room;
@@ -506,6 +545,7 @@ return {
     get_sip_jibri_email_prefix = get_sip_jibri_email_prefix;
     async_handler_wrapper = async_handler_wrapper;
     presence_check_status = presence_check_status;
+    process_host_module = process_host_module;
     room_jid_match_rewrite = room_jid_match_rewrite;
     room_jid_split_subdomain = room_jid_split_subdomain;
     internal_room_jid_match_rewrite = internal_room_jid_match_rewrite;
@@ -513,4 +553,6 @@ return {
     http_get_with_retry = http_get_with_retry;
     ends_with = ends_with;
     starts_with = starts_with;
+    starts_with_one_of = starts_with_one_of;
+    table_shallow_copy = table_shallow_copy;
 };

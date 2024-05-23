@@ -11,9 +11,11 @@ local get_room_by_name_and_subdomain = util.get_room_by_name_and_subdomain;
 local internal_room_jid_match_rewrite = util.internal_room_jid_match_rewrite;
 local is_vpaas = util.is_vpaas;
 local is_sip_jibri_join = util.is_sip_jibri_join;
+local process_host_module = util.process_host_module;
 local new_id = require 'util.id'.medium;
 local um_is_admin = require 'core.usermanager'.is_admin;
-local json = require 'util.json';
+local json = require 'cjson.safe';
+local inspect = require 'inspect';
 
 local MUC_NS = 'http://jabber.org/protocol/muc';
 
@@ -28,6 +30,10 @@ end
 local ignore_list = module:context(muc_domain_base):get_option_set('visitors_ignore_list', {});
 
 local auto_allow_promotion = module:get_option_boolean('auto_allow_visitor_promotion', false);
+
+-- whether to always advertise that visitors feature is enabled for rooms
+-- can be set to off and being controlled by another module, turning it on and off for rooms
+local always_visitors_enabled = module:get_option_boolean('always_visitors_enabled', true);
 
 local function is_admin(jid)
     return um_is_admin(jid, module.host);
@@ -89,11 +95,13 @@ local function request_promotion_received(room, from_jid, from_vnode, nick, time
             local iq_id = new_id();
             sent_iq_cache:set(iq_id, socket.gettime());
 
+            local node = jid.node(room.jid);
+
             module:send(st.iq({
                     type='set', to = req_from, from = module.host, id = iq_id })
                 :tag('visitors', {
                     xmlns='jitsi:visitors',
-                    room = string.gsub(room.jid, muc_domain_base, req_from),
+                    room = jid.join(node, muc_domain_prefix..'.'..req_from),
                     focusjid = focus_jid })
                  :tag('promotion-response', {
                     xmlns='jitsi:visitors',
@@ -119,7 +127,13 @@ local function request_promotion_received(room, from_jid, from_vnode, nick, time
                 body_json.on = false;
             end
 
-            local msg_to_send = json.encode(body_json);
+            local msg_to_send, error = json.encode(body_json);
+
+            if not msg_to_send then
+                module:log('error', 'Error encoding msg room:%s error:%s', room.jid, error)
+                return true;
+            end
+
             if visitors_promotion_requests[room.jid] then
                 visitors_promotion_requests[room.jid][from_jid] = {
                     msg = msg_to_send;
@@ -260,25 +274,38 @@ local function stanza_handler(event)
     return processed;
 end
 
-module:hook('iq/host', stanza_handler, 10);
+local function process_promotion_response(room, id, approved)
+    -- lets reply to participant that requested promotion
+    local username = new_id():lower();
+    visitors_promotion_map[room.jid][username] = {
+        from = visitors_promotion_requests[room.jid][id].from;
+        jid = id;
+    };
 
- --process a host module directly if loaded or hooks to wait for its load
-function process_host_module(name, callback)
-    local function process_host(host)
-        if host == name then
-            callback(module:context(host), host);
-        end
-    end
+    local req_from = visitors_promotion_map[room.jid][username].from;
+    local req_jid = visitors_promotion_map[room.jid][username].jid;
+    local focus_occupant = get_focus_occupant(room);
+    local focus_jid = focus_occupant and focus_occupant.bare_jid or nil;
 
-    if prosody.hosts[name] == nil then
-        module:log('debug', 'No host/component found, will wait for it: %s', name)
+    local iq_id = new_id();
+    sent_iq_cache:set(iq_id, socket.gettime());
 
-        -- when a host or component is added
-        prosody.events.add_handler('host-activated', process_host);
-    else
-        process_host(name);
-    end
+    local node = jid.node(room.jid);
+
+    module:send(st.iq({
+            type='set', to = req_from, from = module.host, id = iq_id })
+        :tag('visitors', {
+            xmlns='jitsi:visitors',
+            room = jid.join(node, muc_domain_prefix..'.'..req_from),
+            focusjid = focus_jid })
+         :tag('promotion-response', {
+            xmlns='jitsi:visitors',
+            jid = req_jid,
+            username = username,
+            allow = approved }):up());
 end
+
+module:hook('iq/host', stanza_handler, 10);
 
 process_host_module(muc_domain_prefix..'.'..muc_domain_base, function(host_module, host)
     -- if visitor mode is started, then you are not allowed to join without request/response exchange of iqs -> deny access
@@ -313,7 +340,7 @@ process_host_module(muc_domain_prefix..'.'..muc_domain_base, function(host_modul
                 -- allow join
                 return;
             end
-
+            module:log('error', 'Visitor needs to be allowed by a moderator %s', stanza.attr.from);
             origin.send(st.error_reply(stanza, 'cancel', 'not-allowed', 'Visitor needs to be allowed by a moderator'));
             return true;
         end
@@ -365,8 +392,12 @@ process_host_module(muc_domain_prefix..'.'..muc_domain_base, function(host_modul
         if json_data == nil then
             return;
         end
-        local data = json.decode(json_data);
-        if not data or data.type ~= 'visitors' or data.action ~= "promotion-response" then
+        local data, error = json.decode(json_data);
+        if not data or data.type ~= 'visitors'
+            or (data.action ~= "promotion-response" and data.action ~= "demote-request") then
+            if error then
+                module:log('error', 'Error decoding error:%s', error);
+            end
             return;
         end
 
@@ -384,48 +415,58 @@ process_host_module(muc_domain_prefix..'.'..muc_domain_base, function(host_modul
             return false;
         end
 
-        -- let's forward to every moderator, this is so they now that this moderator
-        -- took action and they can update UI, as this msg was initially a group chat but we are
-        -- sending it now as provide chat, let's change the type
-        stanza.attr.type = 'chat'; -- it is safe as we are not using this stanza instance anymore
-        for _, room_occupant in room:each_occupant() do
-            -- if moderator send the message
-            if room_occupant.role == 'moderator'
-                and room_occupant.jid ~= occupant.jid
-                and not is_admin(room_occupant.bare_jid) then
-                stanza.attr.to = room_occupant.nick;
-                room:route_stanza(stanza);
+        if data.action == "demote-request" then
+            if occupant.nick ~= room.jid..'/'..data.actor then
+                module:log('error', 'Bad actor in demote request %s', stanza);
+                event.origin.send(st.error_reply(stanza, "cancel", "bad-request"));
+                return true;
+            end
+
+            -- when demoting we want to send message to the demoted participant and to moderators
+            local target_jid = room.jid..'/'..data.id;
+            stanza.attr.type = 'chat'; -- it is safe as we are not using this stanza instance anymore
+            stanza.attr.from = module.host;
+
+            for _, room_occupant in room:each_occupant() do
+                -- do not send it to jicofo or back to the sender
+                if room_occupant.jid ~= occupant.jid and not is_admin(room_occupant.bare_jid) then
+                    if room_occupant.role == 'moderator'
+                        or room_occupant.nick == target_jid then
+                        stanza.attr.to = room_occupant.jid;
+                        room:route_stanza(stanza);
+                    end
+                end
+            end
+
+        else
+            if data.id then
+                process_promotion_response(room, data.id, data.approved and 'true' or 'false');
+            else
+                -- we are in the case with admit all, we need to read data.ids
+                for _,value in pairs(data.ids) do
+                    process_promotion_response(room, value, data.approved and 'true' or 'false');
+                end
             end
         end
 
-        -- lets reply to participant that requested promotion
-        local username = new_id():lower();
-        visitors_promotion_map[room.jid][username] = {
-            from = visitors_promotion_requests[room.jid][data.id].from;
-            jid = data.id;
-        };
-
-        local req_from = visitors_promotion_map[room.jid][username].from;
-        local req_jid = visitors_promotion_map[room.jid][username].jid;
-        local focus_occupant = get_focus_occupant(room);
-        local focus_jid = focus_occupant and focus_occupant.bare_jid or nil;
-
-        local iq_id = new_id();
-        sent_iq_cache:set(iq_id, socket.gettime());
-
-        module:send(st.iq({
-                type='set', to = req_from, from = module.host, id = iq_id })
-            :tag('visitors', {
-                xmlns='jitsi:visitors',
-                room = string.gsub(room.jid, muc_domain_base, req_from),
-                focusjid = focus_jid })
-             :tag('promotion-response', {
-                xmlns='jitsi:visitors',
-                jid = req_jid,
-                username = username ,
-                allow = data.approved and 'true' or 'false' }):up());
         return true; -- halt processing, but return true that we handled it
     end);
+
+    if always_visitors_enabled then
+        local visitorsEnabledField = {
+            name = "muc#roominfo_visitorsEnabled";
+            type = "boolean";
+            label = "Whether visitors are enabled.";
+            value = 1;
+        };
+        -- Append "visitors enabled" to the MUC config form.
+        host_module:context(host):hook("muc-disco#info", function(event)
+            table.insert(event.form, visitorsEnabledField);
+        end);
+        host_module:context(host):hook("muc-config-form", function(event)
+            table.insert(event.form, visitorsEnabledField);
+        end);
+    end
 end);
 
 prosody.events.add_handler('pre-jitsi-authentication', function(session)
