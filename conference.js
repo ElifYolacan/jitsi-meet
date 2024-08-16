@@ -4,7 +4,6 @@ import { jitsiLocalStorage } from '@jitsi/js-utils';
 import Logger from '@jitsi/logger';
 
 import { ENDPOINT_TEXT_MESSAGE_NAME } from './modules/API/constants';
-import { AUDIO_ONLY_SCREEN_SHARE_NO_TRACK } from './modules/UI/UIErrors';
 import mediaDeviceHelper from './modules/devices/mediaDeviceHelper';
 import Recorder from './modules/recorder/Recorder';
 import { createTaskQueue } from './modules/util/helpers';
@@ -17,7 +16,6 @@ import {
 import { sendAnalytics } from './react/features/analytics/functions';
 import {
     maybeRedirectToWelcomePage,
-    redirectToStaticPage,
     reloadWithStoredParams
 } from './react/features/app/actions';
 import { showModeratedNotification } from './react/features/av-moderation/actions';
@@ -55,7 +53,7 @@ import {
     getConferenceOptions,
     sendLocalParticipant
 } from './react/features/base/conference/functions';
-import { getReplaceParticipant } from './react/features/base/config/functions';
+import { getReplaceParticipant, getSsrcRewritingFeatureFlag } from './react/features/base/config/functions';
 import { connect } from './react/features/base/connection/actions.web';
 import {
     checkAndNotifyForNewDevice,
@@ -77,7 +75,6 @@ import {
     JitsiConferenceEvents,
     JitsiE2ePingEvents,
     JitsiMediaDevicesEvents,
-    JitsiTrackErrors,
     JitsiTrackEvents,
     browser
 } from './react/features/base/lib-jitsi-meet';
@@ -86,6 +83,7 @@ import {
     setAudioAvailable,
     setAudioMuted,
     setAudioUnmutePermissions,
+    setInitialGUMPromise,
     setVideoAvailable,
     setVideoMuted,
     setVideoUnmutePermissions
@@ -118,8 +116,11 @@ import {
 import { updateSettings } from './react/features/base/settings/actions';
 import {
     addLocalTrack,
+    createInitialAVTracks,
     destroyLocalTracks,
+    displayErrorsForCreateInitialLocalTracks,
     replaceLocalTrack,
+    setGUMPendingStateOnFailedTracks,
     toggleScreensharing as toggleScreensharingA,
     trackAdded,
     trackRemoved
@@ -154,8 +155,7 @@ import {
 import { isModerationNotificationDisplayed } from './react/features/notifications/functions';
 import { mediaPermissionPromptVisibilityChanged } from './react/features/overlay/actions';
 import { suspendDetected } from './react/features/power-monitor/actions';
-import { initPrejoin } from './react/features/prejoin/actions';
-import { isPrejoinPageVisible } from './react/features/prejoin/functions';
+import { initPrejoin, isPrejoinPageVisible } from './react/features/prejoin/functions';
 import { disableReceiver, stopReceiver } from './react/features/remote-control/actions';
 import { setScreenAudioShareState } from './react/features/screen-share/actions.web';
 import { isScreenAudioShared } from './react/features/screen-share/functions';
@@ -166,7 +166,6 @@ import { handleToggleVideoMuted } from './react/features/toolbox/actions.any';
 import { muteLocal } from './react/features/video-menu/actions.any';
 
 const logger = Logger.getLogger(__filename);
-
 let room;
 
 /*
@@ -275,12 +274,6 @@ class ConferenceConnector {
         logger.error('CONFERENCE FAILED:', err, ...params);
 
         switch (err) {
-
-        case JitsiConferenceErrors.NOT_ALLOWED_ERROR: {
-            // let's show some auth not allowed page
-            APP.store.dispatch(redirectToStaticPage('static/authError.html'));
-            break;
-        }
 
         case JitsiConferenceErrors.RESERVATION_ERROR: {
             const [ code, msg ] = params;
@@ -391,27 +384,6 @@ function disconnect() {
     return APP.connection.disconnect().then(onDisconnected, onDisconnected);
 }
 
-/**
- * Sets the GUM pending state for the tracks that have failed.
- *
- * NOTE: Some of the track that we will be setting to GUM pending state NONE may not have failed but they may have
- * been requested. This won't be a problem because their current GUM pending state will be NONE anyway.
- * @param {JitsiLocalTrack} tracks - The tracks that have been created.
- * @returns {void}
- */
-function setGUMPendingStateOnFailedTracks(tracks) {
-    const tracksTypes = tracks.map(track => {
-        if (track.getVideoType() === VIDEO_TYPE.DESKTOP) {
-            return MEDIA_TYPE.SCREENSHARE;
-        }
-
-        return track.getType();
-    });
-    const nonPendingTracks = [ MEDIA_TYPE.AUDIO, MEDIA_TYPE.VIDEO ].filter(type => !tracksTypes.includes(type));
-
-    APP.store.dispatch(gumPending(nonPendingTracks, IGUMPendingState.NONE));
-}
-
 export default {
     /**
      * Flag used to delay modification of the muted status of local media tracks
@@ -510,57 +482,12 @@ export default {
                     return [];
                 });
         } else if (requestedAudio || requestedVideo) {
-            APP.store.dispatch(gumPending(initialDevices, IGUMPendingState.PENDING_UNMUTE));
-            tryCreateLocalTracks = createLocalTracksF({
+            tryCreateLocalTracks = APP.store.dispatch(createInitialAVTracks({
                 devices: initialDevices,
                 timeout,
                 firePermissionPromptIsShownEvent: true
-            })
-            .catch(async error => {
-                if (error.name === JitsiTrackErrors.TIMEOUT && !browser.isElectron()) {
-                    errors.audioAndVideoError = error;
-
-                    return [];
-                }
-
-                // Retry with separate gUM calls.
-                const gUMPromises = [];
-                const tracks = [];
-
-                if (requestedAudio) {
-                    gUMPromises.push(createLocalTracksF(audioOptions));
-                }
-
-                if (requestedVideo) {
-                    gUMPromises.push(createLocalTracksF({
-                        devices: [ MEDIA_TYPE.VIDEO ],
-                        timeout,
-                        firePermissionPromptIsShownEvent: true
-                    }));
-                }
-
-                const results = await Promise.allSettled(gUMPromises);
-                let errorMsg;
-
-                results.forEach((result, idx) => {
-                    if (result.status === 'fulfilled') {
-                        tracks.push(result.value[0]);
-                    } else {
-                        errorMsg = result.reason;
-                        const isAudio = idx === 0;
-
-                        logger.error(`${isAudio ? 'Audio' : 'Video'} track creation failed with error ${errorMsg}`);
-                        if (isAudio) {
-                            errors.audioOnlyError = errorMsg;
-                        } else {
-                            errors.videoOnlyError = errorMsg;
-                        }
-                    }
-                });
-
-                if (errors.audioOnlyError && errors.videoOnlyError) {
-                    errors.audioAndVideoError = errorMsg;
-                }
+            })).then(({ tracks, errors: pErrors }) => {
+                Object.assign(errors, pErrors);
 
                 return tracks;
             });
@@ -579,42 +506,6 @@ export default {
             tryCreateLocalTracks,
             errors
         };
-    },
-
-    /**
-     * Displays error notifications according to the state carried by {@code errors} object returned
-     * by {@link createInitialLocalTracks}.
-     * @param {Object} errors - the errors (if any) returned by {@link createInitialLocalTracks}.
-     *
-     * @returns {void}
-     * @private
-     */
-    _displayErrorsForCreateInitialLocalTracks(errors) {
-        const {
-            audioAndVideoError,
-            audioOnlyError,
-            screenSharingError,
-            videoOnlyError
-        } = errors;
-
-        // FIXME If there will be microphone error it will cover any screensharing dialog, but it's still better than in
-        // the reverse order where the screensharing dialog will sometimes be closing the microphone alert
-        // ($.prompt.close(); is called). Need to figure out dialogs chaining to fix that.
-        if (screenSharingError) {
-            this._handleScreenSharingError(screenSharingError);
-        }
-        if (audioAndVideoError || audioOnlyError) {
-            if (audioOnlyError || videoOnlyError) {
-                // If both requests for 'audio' + 'video' and 'audio' only failed, we assume that there are some
-                // problems with user's microphone and show corresponding dialog.
-                APP.store.dispatch(notifyMicError(audioOnlyError));
-                APP.store.dispatch(notifyCameraError(videoOnlyError));
-            } else {
-                // If request for 'audio' + 'video' failed, but request for 'audio' only was OK, we assume that we had
-                // problems with camera and show corresponding dialog.
-                APP.store.dispatch(notifyCameraError(audioAndVideoError));
-            }
-        }
     },
 
     startConference(tracks) {
@@ -700,7 +591,7 @@ export default {
         const handleInitialTracks = (options, tracks) => {
             let localTracks = tracks;
 
-            if (options.startWithAudioMuted || room?.isStartAudioMuted()) {
+            if (options.startWithAudioMuted) {
                 // Always add the track on Safari because of a known issue where audio playout doesn't happen
                 // if the user joins audio and video muted, i.e., if there is no local media capture.
                 if (browser.isWebKitBased()) {
@@ -709,58 +600,38 @@ export default {
                     localTracks = localTracks.filter(track => track.getType() !== MEDIA_TYPE.AUDIO);
                 }
             }
-            if (room?.isStartVideoMuted()) {
-                localTracks = localTracks.filter(track => track.getType() !== MEDIA_TYPE.VIDEO);
-            }
 
             return localTracks;
         };
-
-        if (isPrejoinPageVisible(state)) {
-            const { tryCreateLocalTracks, errors } = this.createInitialLocalTracks(initialOptions);
-            const localTracks = await tryCreateLocalTracks;
-
-            // Initialize device list a second time to ensure device labels get populated in case of an initial gUM
-            // acceptance; otherwise they may remain as empty strings.
-            this._initDeviceList(true);
-
-            if (isPrejoinPageVisible(state)) {
-                APP.store.dispatch(gumPending([ MEDIA_TYPE.AUDIO, MEDIA_TYPE.VIDEO ], IGUMPendingState.NONE));
-
-                return APP.store.dispatch(initPrejoin(localTracks, errors));
-            }
-
-            logger.debug('Prejoin screen no longer displayed at the time when tracks were created');
-
-            this._displayErrorsForCreateInitialLocalTracks(errors);
-
-            const tracks = handleInitialTracks(initialOptions, localTracks);
-
-            setGUMPendingStateOnFailedTracks(tracks);
-
-            return this._setLocalAudioVideoStreams(tracks);
-        }
-
+        const { dispatch, getState } = APP.store;
         const { tryCreateLocalTracks, errors } = this.createInitialLocalTracks(initialOptions);
 
-        return Promise.all([
-            tryCreateLocalTracks.then(tr => {
-                this._displayErrorsForCreateInitialLocalTracks(errors);
+        dispatch(setInitialGUMPromise(tryCreateLocalTracks.then(async tr => {
+            const tracks = handleInitialTracks(initialOptions, tr);
 
-                return tr;
-            }).then(tr => {
-                this._initDeviceList(true);
+            this._initDeviceList(true);
 
-                const filteredTracks = handleInitialTracks(initialOptions, tr);
+            if (isPrejoinPageVisible(getState())) {
+                dispatch(gumPending([ MEDIA_TYPE.AUDIO, MEDIA_TYPE.VIDEO ], IGUMPendingState.NONE));
+                dispatch(setInitialGUMPromise());
 
-                setGUMPendingStateOnFailedTracks(filteredTracks);
+                // Note: Not sure if initPrejoin needs to be async. But let's wait for it just to be sure the
+                // tracks are added.
+                initPrejoin(tracks, errors, dispatch);
+            } else {
+                APP.store.dispatch(displayErrorsForCreateInitialLocalTracks(errors));
+                setGUMPendingStateOnFailedTracks(tracks, APP.store.dispatch);
+            }
 
-                return filteredTracks;
-            }),
-            APP.store.dispatch(connect())
-        ]).then(([ tracks, _ ]) => {
-            this.startConference(tracks).catch(logger.error);
-        });
+            return {
+                tracks,
+                errors
+            };
+        })));
+
+        if (!isPrejoinPageVisible(getState())) {
+            dispatch(connect());
+        }
     },
 
     /**
@@ -814,11 +685,13 @@ export default {
 
     /**
      * Simulates toolbar button click for audio mute. Used by shortcuts and API.
+     *
      * @param {boolean} mute true for mute and false for unmute.
      * @param {boolean} [showUI] when set to false will not display any error
      * dialogs in case of media permissions error.
+     * @returns {Promise}
      */
-    muteAudio(mute, showUI = true) {
+    async muteAudio(mute, showUI = true) {
         const state = APP.store.getState();
 
         if (!mute
@@ -858,7 +731,8 @@ export default {
             };
 
             APP.store.dispatch(gumPending([ MEDIA_TYPE.AUDIO ], IGUMPendingState.PENDING_UNMUTE));
-            createLocalTracksF({ devices: [ 'audio' ] })
+
+            await createLocalTracksF({ devices: [ 'audio' ] })
                 .then(([ audioTrack ]) => audioTrack)
                 .catch(error => {
                     maybeShowErrorDialog(error);
@@ -1234,7 +1108,7 @@ export default {
         const { tryCreateLocalTracks, errors } = this.createInitialLocalTracks(options);
         const localTracks = await tryCreateLocalTracks;
 
-        this._displayErrorsForCreateInitialLocalTracks(errors);
+        APP.store.dispatch(displayErrorsForCreateInitialLocalTracks(errors));
         localTracks.forEach(track => {
             if ((track.isAudioTrack() && this.isLocalAudioMuted())
                 || (track.isVideoTrack() && this.isLocalVideoMuted())) {
@@ -1271,10 +1145,11 @@ export default {
             APP.store.dispatch(gumPending(mutedTrackTypes, IGUMPendingState.NONE));
         }
 
-        this._setLocalAudioVideoStreams(tracks);
         this._room = room; // FIXME do not use this
 
         APP.store.dispatch(_conferenceWillJoin(room));
+
+        this._setLocalAudioVideoStreams(tracks);
 
         sendLocalParticipant(APP.store, room);
 
@@ -1386,8 +1261,7 @@ export default {
                     return;
                 }
 
-                APP.store.dispatch(
-                replaceLocalTrack(oldTrack, newTrack, room))
+                APP.store.dispatch(replaceLocalTrack(oldTrack, newTrack, room))
                     .then(() => {
                         this.updateAudioIconEnabled();
                     })
@@ -1575,50 +1449,6 @@ export default {
     },
 
     /**
-     * Handles {@link JitsiTrackError} returned by the lib-jitsi-meet when
-     * trying to create screensharing track. It will either do nothing if
-     * the dialog was canceled on user's request or display an error if
-     * screensharing couldn't be started.
-     * @param {JitsiTrackError} error - The error returned by
-     * {@link _createDesktopTrack} Promise.
-     * @private
-     */
-    _handleScreenSharingError(error) {
-        if (error.name === JitsiTrackErrors.SCREENSHARING_USER_CANCELED) {
-            return;
-        }
-
-        logger.error('failed to share local desktop', error);
-
-        // Handling:
-        // JitsiTrackErrors.CONSTRAINT_FAILED
-        // JitsiTrackErrors.PERMISSION_DENIED
-        // JitsiTrackErrors.SCREENSHARING_GENERIC_ERROR
-        // and any other
-        let descriptionKey;
-        let titleKey;
-
-        if (error.name === JitsiTrackErrors.PERMISSION_DENIED) {
-            descriptionKey = 'dialog.screenSharingPermissionDeniedError';
-            titleKey = 'dialog.screenSharingFailedTitle';
-        } else if (error.name === JitsiTrackErrors.CONSTRAINT_FAILED) {
-            descriptionKey = 'dialog.cameraConstraintFailedError';
-            titleKey = 'deviceError.cameraError';
-        } else if (error.name === JitsiTrackErrors.SCREENSHARING_GENERIC_ERROR) {
-            descriptionKey = 'dialog.screenSharingFailed';
-            titleKey = 'dialog.screenSharingFailedTitle';
-        } else if (error === AUDIO_ONLY_SCREEN_SHARE_NO_TRACK) {
-            descriptionKey = 'notify.screenShareNoAudio';
-            titleKey = 'notify.screenShareNoAudioTitle';
-        }
-
-        APP.store.dispatch(showErrorNotification({
-            descriptionKey,
-            titleKey
-        }, NOTIFICATION_TIMEOUT_TYPE.LONG));
-    },
-
-    /**
      * Setup interaction between conference and UI.
      */
     _setupListeners() {
@@ -1790,7 +1620,11 @@ export default {
 
         room.on(
             JitsiConferenceEvents.CONFERENCE_CREATED_TIMESTAMP,
-            conferenceTimestamp => APP.store.dispatch(conferenceTimestampChanged(conferenceTimestamp)));
+            conferenceTimestamp => {
+                APP.store.dispatch(conferenceTimestampChanged(conferenceTimestamp));
+                APP.API.notifyConferenceCreatedTimestamp(conferenceTimestamp);
+            }
+        );
 
         room.on(
             JitsiConferenceEvents.DISPLAY_NAME_CHANGED,
@@ -1825,6 +1659,18 @@ export default {
                 });
             }
         );
+
+        room.on(
+            JitsiConferenceEvents.SILENT_STATUS_CHANGED,
+            (id, isSilent) => {
+                APP.store.dispatch(participantUpdated({
+                    conference: room,
+                    id,
+                    isSilent
+                }));
+            }
+        );
+
         room.on(
             JitsiConferenceEvents.BOT_TYPE_CHANGED,
             (id, botType) => {
@@ -1983,12 +1829,31 @@ export default {
 
         room.on(
             JitsiConferenceEvents.DATA_CHANNEL_CLOSED, ev => {
-                APP.store.dispatch(dataChannelClosed(ev.code, ev.reason));
-                APP.store.dispatch(showWarningNotification({
-                    descriptionKey: 'notify.dataChannelClosedDescription',
-                    titleKey: 'notify.dataChannelClosed',
-                    uid: DATA_CHANNEL_CLOSED_NOTIFICATION_ID
-                }, NOTIFICATION_TIMEOUT_TYPE.STICKY));
+                const state = APP.store.getState();
+                const { dataChannelOpen } = state['features/base/conference'];
+                const timeout = typeof dataChannelOpen === 'undefined' ? 15000 : 60000;
+
+                // Show the notification only when the data channel connection doesn't get re-established in 60 secs if
+                // it was already established at the beginning of the call, show it sooner otherwise. This notification
+                // can be confusing and alarming to users even when there is no significant impact to user experience
+                // if the the reconnect happens immediately.
+                setTimeout(() => {
+                    const { dataChannelOpen: open } = APP.store.getState()['features/base/conference'];
+
+                    if (!open) {
+                        const descriptionKey = getSsrcRewritingFeatureFlag(state)
+                            ? 'notify.dataChannelClosedDescriptionWithAudio' : 'notify.dataChannelClosedDescription';
+                        const titleKey = getSsrcRewritingFeatureFlag(state)
+                            ? 'notify.dataChannelClosedWithAudio' : 'notify.dataChannelClosed';
+
+                        APP.store.dispatch(dataChannelClosed(ev.code, ev.reason));
+                        APP.store.dispatch(showWarningNotification({
+                            descriptionKey,
+                            titleKey,
+                            uid: DATA_CHANNEL_CLOSED_NOTIFICATION_ID
+                        }, NOTIFICATION_TIMEOUT_TYPE.STICKY));
+                    }
+                }, timeout);
             }
         );
     },

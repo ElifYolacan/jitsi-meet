@@ -38,14 +38,6 @@ import { IJitsiConference } from './reducer';
 export const getConferenceState = (state: IReduxState) => state['features/base/conference'];
 
 /**
- * Is the conference joined or not.
- *
- * @param {IReduxState} state - Global state.
- * @returns {boolean}
- */
-export const getIsConferenceJoined = (state: IReduxState) => Boolean(getConferenceState(state).conference);
-
-/**
  * Attach a set of local tracks to a conference.
  *
  * @param {JitsiConference} conference - Conference instance.
@@ -185,18 +177,12 @@ export function forEachConference(
 export function getConferenceName(stateful: IStateful): string {
     const state = toState(stateful);
     const { callee } = state['features/base/jwt'];
-    const {
-        callDisplayName,
-        localSubject: configLocalSubject,
-        subject: configSubject
-    } = state['features/base/config'];
+    const { callDisplayName } = state['features/base/config'];
     const { localSubject, pendingSubjectChange, room, subject } = getConferenceState(state);
 
-    return (pendingSubjectChange
-        || configSubject
+    return (localSubject
+        || pendingSubjectChange
         || subject
-        || configLocalSubject
-        || localSubject
         || callDisplayName
         || callee?.name
         || (room && safeStartCase(safeDecodeURIComponent(room)))) ?? '';

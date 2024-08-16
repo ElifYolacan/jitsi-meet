@@ -287,6 +287,7 @@ export interface IConfig {
     disableRemoveRaisedHandOnFocus?: boolean;
     disableResponsiveTiles?: boolean;
     disableRtx?: boolean;
+    disableSelfDemote?: boolean;
     disableSelfView?: boolean;
     disableSelfViewSettings?: boolean;
     disableShortcuts?: boolean;
@@ -396,6 +397,7 @@ export interface IConfig {
     hideDominantSpeakerBadge?: boolean;
     hideEmailInSettings?: boolean;
     hideLobbyButton?: boolean;
+    hideLoginButton?: boolean;
     hideParticipantsStats?: boolean;
     hideRecordingLabel?: boolean;
     hosts?: {
@@ -440,6 +442,7 @@ export interface IConfig {
     };
     localSubject?: string;
     locationURL?: URL;
+    mainToolbarButtons?: Array<Array<string>>;
     maxFullResolutionParticipants?: number;
     microsoftApiApplicationClientID?: string;
     moderatedRoomServiceUrl?: string;
@@ -476,6 +479,7 @@ export interface IConfig {
     peopleSearchQueryTypes?: string[];
     peopleSearchUrl?: string;
     preferBosh?: boolean;
+    preferVisitor?: boolean;
     preferredTranscribeLanguage?: string;
     prejoinConfig?: {
         enabled?: boolean;
@@ -542,7 +546,6 @@ export interface IConfig {
         assumeBandwidth?: boolean;
         disableE2EE?: boolean;
         dumpTranscript?: boolean;
-        mobileXmppWsThreshold?: number;
         noAutoPlayVideo?: boolean;
         p2pTestMode?: boolean;
         skipInterimTranscriptions?: boolean;
