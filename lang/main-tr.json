@@ -1391,7 +1391,7 @@
         "off": "Altyazı durdu",
         "pending": "Toplantıyı Altyazıye hazırlanıyor...",
         "sourceLanguageHere": "tıklayın",
-        "sourceLanguageDesc": "Şu anda toplantı dili <b>{{sourceLanguage}</b> olarak ayarlıdır. <br/> Bunu şuradan değiştirebilirsiniz",
+        "sourceLanguageDesc": "Şu anda toplantı dili <b>{{sourceLanguage}}</b> olarak ayarlıdır. <br/> Bunu şuradan değiştirebilirsiniz",
         "start": "Altyazıları göstermeye başla",
         "stop": "Altyazıları göstermeyi durdur",
         "subtitles": "Altyazılar",
