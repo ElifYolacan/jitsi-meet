@@ -75,9 +75,12 @@ const styles = (theme: Theme, props: IProps) => {
         transcriptionSubtitles: {
             bottom: `${bottom}px`,
             marginBottom: `${marginBottom}px`,
-            fontSize: `${fontSize}px`,
+            fontSize: `16px`,
+            fontWeight:'600',
             left: '50%',
             maxWidth: '50vw',
+            height:'88px',
+            overflow:'auto',
             overflowWrap: 'break-word' as const,
             pointerEvents: 'none' as const,
             position: 'absolute' as const,
